@@ -382,3 +382,171 @@ function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
   initializeArtwork(); // Re-initialize wheels and connectors on resize
 }
+
+// ruxu0462
+// An array to hold all the wheel objects
+let wheels = [];
+// Pre-defined color palettes inspired by the artwork
+const colorPalettes = [
+  ['#FF6B6B', '#FFD166', '#06D6A0', '#118AB2', '#073B4C'],
+  ['#E63946', '#F1FAEE', '#A8DADC', '#457B9D', '#1D3557'],
+  ['#F4A261', '#E76F51', '#2A9D8F', '#264653', '#E9C46A'],
+  ['#D81159', '#8F2D56', '#218380', '#FBB13C', '#73D2DE']
+];
+const backgroundColor = '#003049'; // Dark blue background
+
+// The Wheel class is UNCHANGED.
+class Wheel {
+  // The constructor sets up the initial properties for each wheel.
+  constructor(x, y, radius, palette) {
+    this.x = x;
+    this.y = y;
+    this.radius = radius;
+    this.colors = palette;
+    this.stemAngle = random(TWO_PI);
+  }
+
+  // The main draw function for the wheel.
+  display() {
+    push();
+    translate(this.x, this.y);
+
+    this.drawOuterDots();
+    this.drawSpokes();
+    this.drawInnerCircles();
+    this.drawStem();
+
+    pop();
+  }
+
+  // ... (All other methods inside the Wheel class like drawOuterDots, drawSpokes, etc., remain exactly the same)
+  drawOuterDots() {
+    const dotCount = 40;
+    const dotRadius = this.radius * 0.9;
+    const dotSize = this.radius * 0.08;
+    fill(this.colors[1]);
+    noStroke();
+    for (let i = 0; i < dotCount; i++) {
+      const angle = map(i, 0, dotCount, 0, TWO_PI);
+      const dx = cos(angle) * dotRadius;
+      const dy = sin(angle) * dotRadius;
+      circle(dx, dy, dotSize);
+    }
+  }
+
+  drawSpokes() {
+    const spokeCount = 24;
+    const innerRadius = this.radius * 0.55;
+    const outerRadius = this.radius * 0.8;
+    stroke(this.colors[0]);
+    strokeWeight(this.radius * 0.03);
+    for (let i = 0; i < spokeCount; i++) {
+      const angle = map(i, 0, spokeCount, 0, TWO_PI);
+      const x1 = cos(angle) * innerRadius;
+      const y1 = sin(angle) * innerRadius;
+      const x2 = cos(angle) * outerRadius;
+      const y2 = sin(angle) * outerRadius;
+      line(x1, y1, x2, y2);
+    }
+  }
+
+  drawInnerCircles() {
+    noStroke();
+    fill(this.colors[2]);
+    circle(0, 0, this.radius * 0.6);
+    fill(this.colors[3]);
+    const innerDotCount = 20;
+    const innerDotRadius = this.radius * 0.4;
+    const innerDotSize = this.radius * 0.06;
+    for (let i = 0; i < innerDotCount; i++) {
+       const angle = map(i, 0, innerDotCount, 0, TWO_PI);
+       const dx = cos(angle) * innerDotRadius;
+       const dy = sin(angle) * innerDotRadius;
+       circle(dx, dy, innerDotSize);
+    }
+    fill(this.colors[4]);
+    circle(0, 0, this.radius * 0.3);
+    fill(this.colors[0]);
+    circle(0, 0, this.radius * 0.15);
+  }
+
+  drawStem() {
+    stroke(this.colors[1]);
+    strokeWeight(this.radius * 0.04);
+    noFill();
+    const startX = cos(this.stemAngle) * (this.radius * 0.075);
+    const startY = sin(this.stemAngle) * (this.radius * 0.075);
+    const endX = cos(this.stemAngle) * (this.radius * 0.5);
+    const endY = sin(this.stemAngle) * (this.radius * 0.5);
+    const controlX = cos(this.stemAngle + 0.5) * (this.radius * 0.4);
+    const controlY = sin(this.stemAngle + 0.5) * (this.radius * 0.4);
+    beginShape();
+    vertex(startX, startY);
+    quadraticVertex(controlX, controlY, endX, endY);
+    endShape();
+    noStroke();
+    fill(this.colors[1]);
+    circle(endX, endY, this.radius * 0.08);
+  }
+}
+
+// The setup function is UNCHANGED from the previous version.
+function setup() {
+  createCanvas(windowWidth, windowHeight);
+  angleMode(RADIANS);
+  
+  wheels = [];
+  const numWheels = 20;
+  const maxAttempts = 5000;
+  let currentAttempts = 0;
+
+  while (wheels.length < numWheels && currentAttempts < maxAttempts) {
+    let candidate = {
+      x: random(width),
+      y: random(height),
+      radius: random(width * 0.05, width * 0.15),
+      palette: random(colorPalettes)
+    };
+    
+    let isOverlapping = false;
+    
+    for (let other of wheels) {
+      let d = dist(candidate.x, candidate.y, other.x, other.y);
+      let padding = 10; 
+      if (d < candidate.radius + other.radius + padding) {
+        isOverlapping = true;
+        break;
+      }
+    }
+    
+    if (!isOverlapping) {
+      wheels.push(new Wheel(candidate.x, candidate.y, candidate.radius, candidate.palette));
+    }
+    
+    currentAttempts++;
+  }
+
+  if (currentAttempts >= maxAttempts) {
+      console.log("Could not place all wheels. The canvas might be too crowded.");
+  }
+}
+
+// ===============================================
+// The draw function has been updated.
+// ===============================================
+function draw() {
+  background(backgroundColor); // Set the background color
+  
+
+  // Loop through all the wheels and display them
+  for (const wheel of wheels) {
+    wheel.display();
+  }
+}
+
+
+// The window resizing function is UNCHANGED.
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight);
+  setup();
+}
