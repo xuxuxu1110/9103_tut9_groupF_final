@@ -1,57 +1,30 @@
 /**
- * This script creates an interactive artwork inspired by Pacita Abad's "Wheels of Fortune."
- * It generates a dynamic arrangement of interconnected wheels with vibrant color palettes.
+ * This sketch creates a dynamic, abstract artwork inspired by Pacita Abad's "Wheels of Fortune."
+ * It generates a collection of interconnected, vibrantly colored "wheels" that are randomly placed
+ * across the canvas while attempting to minimize excessive overlap. Connectors are drawn between
+ * nearby wheels, adding to the intricate, machine-like aesthetic of the original artwork.
  *
- * The artwork features:
- * - Procedurally generated wheels with varied sizes and positions, allowing for slight overlaps.
- * - Decorative connectors between nearby wheels, mimicking a chain-like appearance.
- * - Interactive elements:
- * - Clicking a wheel triggers a "dandelion" effect, dispersing its internal elements (spokes and outer dots)
- * and those of other wheels sharing the same base color.
- * - Pressing the spacebar triggers a "rewind" effect, bringing the dispersed particles back to their
- * original wheels, and gradually fading in the wheels' internal patterns.
- *
- * The "dandelion" and "rewind" functionalities are implemented using a particle system and state management
- * within the Wheel and DandelionParticle classes.
+ * The artwork is designed to be responsive, re-initializing its layout when the browser window is resized.
  */
 
-// --- Global Variables ---
+let wheels = []; // Array to hold all Wheel objects
+let connectors = []; // Array to hold all Connector objects
 
 /**
- * @type {Array<Wheel>} wheels - An array to store all Wheel objects displayed on the canvas.
- * These are the central, circular elements of the artwork.
- */
-let wheels = [];
-
-/**
- * @type {Array<Connector>} connectors - An array to store all Connector objects.
- * These lines visually link nearby wheels, adding to the composition.
- */
-let connectors = [];
-
-/**
- * @type {Array<DandelionParticle>} dandelionParticles - An array to store all active DandelionParticle objects.
- * These particles are generated when a wheel is "blown away" and animate independently.
- */
-let dandelionParticles = [];
-
-/**
- * @type {Array<Array<Wheel>>} blownAwayHistory - A history stack to store groups of wheels that were "blown away."
- * This is crucial for the rewind functionality, allowing wheels to be restored in reverse order.
- * Each entry in the array is itself an array of Wheel objects that were simultaneously affected.
- */
-let blownAwayHistory = [];
-
-
-/**
- * @const {Array<Array<string>>} colorPalettes - A collection of predefined color palettes for the wheels.
- * Each inner array defines the colors for different parts of a single wheel:
- * [Base, Outer Dots, Inner Dots/Spokes Stroke, Spokes Fill, Center]
- * These palettes are inspired by the vibrant and layered approach seen in Pacita Abad's "Wheels of Fortune."
+ * Enhanced color palettes inspired by Pacita Abad's "Wheels of Fortune."
+ * Each sub-array represents a distinct color palette designed for a single wheel,
+ * mimicking the vibrant, layered, and often contrasting colors found in Abad's work.
+ * These are hand-picked approximations and may require fine-tuning for precise replication.
+ * The colors within each palette are ordered as follows:
+ * [0]: Base color for the main circle of the wheel.
+ * [1]: Color for the outer decorative dots and the 'stem' element.
+ * [2]: Color for the first inner circle.
+ * [3]: Color for the spokes and the inner dots.
+ * [4]: Color for the second inner circle.
  */
 const colorPalettes = [
-  // Palette 1: Deep Blue/Purple with Yellow/Orange Accents
-  ['#45206A', '#FFD700', '#FF8C00', '#B0E0E6', '#8A2BE2'], // Base, Outer Dots, Inner Circles, Spokes/Inner Dots, Center
+  // Palette 1: Deep Blue/Purple with Yellow/Orange Accents (reminiscent of a top-left wheel in the original)
+  ['#45206A', '#FFD700', '#FF8C00', '#B0E0E6', '#8A2BE2'], // Base, Outer Dots/Stem, Inner Circle 1, Spokes/Inner Dots, Inner Circle 2
   // Palette 2: Fiery Reds and Oranges with Green/Blue contrast
   ['#D90429', '#F4D35E', '#F7B267', '#0A796F', '#2E4057'],
   // Palette 3: Warm Earthy Tones with Bright Pinks/Greens
@@ -62,818 +35,434 @@ const colorPalettes = [
   ['#C11F68', '#F9E795', '#F5EEF8', '#2ECC71', '#8E44AD'],
   // Palette 6: Deep Teal with Orange/Red
   ['#006D77', '#FF8C00', '#E29578', '#83C5BE', '#D64045'],
+  // Additional palettes can be added here based on further visual analysis of the original artwork.
 ];
 
-/**
- * @const {string} backgroundColor - The background color of the canvas.
- * A dark, muted tone is chosen to make the vibrant wheels stand out,
- * similar to the atmospheric quality of the original painting.
- */
-const backgroundColor = '#2A363B';
-
-
-// --- p5.js Core Functions ---
+const backgroundColor = '#2A363B'; // A dark, muted background color, chosen to be similar to the original painting's backdrop.
 
 /**
- * `setup()` is a p5.js function that runs once when the program starts.
+ * The `setup()` function is called once when the program starts.
  * It's used to define initial environment properties like canvas size
- * and to perform initial setup for the artwork.
+ * and to perform initial setup of the artwork components.
  */
 function setup() {
-  /**
-   * Step 1: Create the Canvas.
-   * `createCanvas(width, height)` sets up the drawing surface.
-   * `windowWidth` and `windowHeight` make the canvas fill the entire browser window.
-   */
-  createCanvas(windowWidth, windowHeight);
+  createCanvas(windowWidth, windowHeight); // Create a canvas that fills the browser window.
+  angleMode(RADIANS); // Set the angle mode to RADIANS for trigonometric functions, which is common in p5.js and aligns with typical mathematical conventions.
 
-  /**
-   * Step 2: Set the Angle Mode.
-   * `angleMode(RADIANS)` specifies that all angle calculations (e.g., `cos()`, `sin()`)
-   * will use radians instead of degrees, which is common practice in p5.js.
-   */
-  angleMode(RADIANS);
-
-  /**
-   * Step 3: Initialize the Artwork.
-   * Call a custom function to populate the `wheels` and `connectors` arrays
-   * and prepare the initial visual state of the artwork.
-   */
-  initializeArtwork();
+  initializeArtwork(); // Call a custom function to set up the wheels and connectors.
 }
 
 /**
- * `draw()` is a p5.js function that runs repeatedly, continuously executing
- * the code within it. It's the main rendering loop of the sketch.
+ * The `draw()` function is called repeatedly, approximately 60 times per second.
+ * It is responsible for continuously rendering the artwork on the canvas.
  */
 function draw() {
-  /**
-   * Step 1: Draw the Background.
-   * `background()` clears the canvas in each frame, creating a sense of animation
-   * by redrawing all elements from scratch.
-   */
-  background(backgroundColor);
+  background(backgroundColor); // Draw the defined background color to clear the canvas in each frame, creating a fresh drawing surface.
 
   /**
-   * Step 2: Display Connectors.
-   * Iterate through the `connectors` array and call the `display()` method
-   * for each connector. Connectors are drawn first to ensure they appear
-   * visually "behind" the wheels.
+   * Display all connector objects.
+   * Connectors are displayed before wheels to ensure they appear
+   * visually behind the wheels, creating a layered effect.
    */
   for (const conn of connectors) {
     conn.display();
   }
 
   /**
-   * Step 3: Display Wheels and Update their Internal Pattern Alpha.
-   * Iterate through the `wheels` array.
-   * - `wheel.display()` renders the wheel's various components.
-   * - `wheel.updateAlpha()` is crucial for the fade-in effect of the
-   * wheel's internal patterns when it is restored.
+   * Display all wheel objects.
+   * Wheels are drawn on top of the connectors.
    */
   for (const wheel of wheels) {
     wheel.display();
-    wheel.updateAlpha();
-  }
-
-  /**
-   * Step 4: Update and Display Dandelion Particles.
-   * Iterate through the `dandelionParticles` array in reverse.
-   * Iterating backward is important when removing elements from an array
-   * during iteration, as it prevents skipping elements.
-   * - `p.update()` calculates the particle's new position, size, and transparency.
-   * - `p.display()` draws the particle at its updated state.
-   * - Particles are removed from the array if their alpha becomes zero
-   * and they are either not returning (flown away and faded out) or
-   * have returned to their target and faded out. This keeps the array clean.
-   */
-  for (let i = dandelionParticles.length - 1; i >= 0; i--) {
-    let p = dandelionParticles[i];
-    p.update();
-    p.display();
-    // Condition for removing particles: either they've flown away and faded out,
-    // or they've returned to the wheel and fully faded out (merged).
-    if ((p.alpha <= 0 && !p.isReturning) || (p.isReturning && dist(p.x, p.y, p.targetX, p.targetY) < 1 && p.alpha <= 0)) {
-        dandelionParticles.splice(i, 1);
-    }
   }
 }
 
+---
 
-// --- Initialization Function ---
+### Initialization Function
 
 /**
- * `initializeArtwork()` sets up the initial arrangement of wheels and connectors.
- * It's called once in `setup()` and again when the window is resized.
- * This function also clears any existing interactive elements to ensure a fresh start.
+ * `initializeArtwork()` is a custom function responsible for generating and
+ * arranging all the `Wheel` and `Connector` objects that form the artwork.
+ * It clears any existing wheels and connectors, then proceeds to place
+ * new wheels on the canvas, attempting to optimize their placement to
+ * allow for some overlap while ensuring they are close enough to form connections.
+ * Finally, it generates connections between nearby wheels.
  */
 function initializeArtwork() {
-  /**
-   * Step 1: Clear existing arrays.
-   * Resetting these arrays ensures that when the function is called again (e.g., on window resize),
-   * no old wheels, connectors, or particles persist from previous configurations.
-   */
-  wheels = [];
-  connectors = [];
-  dandelionParticles = [];
-  blownAwayHistory = [];
+  wheels = []; // Clear the array of existing wheels.
+  connectors = []; // Clear the array of existing connectors.
+
+  const numWheels = 25; // Define the target number of wheels to generate for a denser feel, similar to the original artwork's composition.
+  const minRadius = width * 0.04; // Set the minimum possible radius for a wheel, relative to the canvas width.
+  const maxRadius = width * 0.12; // Set the maximum possible radius for a wheel, relative to the canvas width.
+  const maxAttempts = 5000; // Define a maximum number of attempts to place a wheel, to prevent infinite loops in difficult packing scenarios.
+  let currentAttempts = 0; // Initialize a counter for current placement attempts.
 
   /**
-   * Step 2: Define wheel generation parameters.
-   * `numWheels`: The target number of wheels to place. Adjusted for a denser look.
-   * `minRadius`, `maxRadius`: The minimum and maximum possible radii for the wheels.
-   * `maxAttempts`: A safeguard to prevent infinite loops if wheel placement becomes impossible.
-   * `currentAttempts`: Tracks how many attempts have been made to place wheels.
-   */
-  const numWheels = 25;
-  const minRadius = width * 0.04;
-  const maxRadius = width * 0.12;
-  const maxAttempts = 5000;
-  let currentAttempts = 0;
-
-  /**
-   * Step 3: Generate wheels with optimized packing.
-   * This loop attempts to place `numWheels` on the canvas, trying to avoid excessive overlaps
-   * and ensuring that new wheels are reasonably close to existing ones for connections.
+   * Generate wheels with optimized packing.
+   * This loop attempts to place `numWheels` on the canvas.
+   * It continues as long as the target number of wheels hasn't been met
+   * and the maximum number of placement attempts hasn't been exceeded.
    */
   while (wheels.length < numWheels && currentAttempts < maxAttempts) {
-    // Generate a random radius and position for a potential new wheel.
-    let candidateRadius = random(minRadius, maxRadius);
-    let candidateX = random(candidateRadius, width - candidateRadius);
-    let candidateY = random(candidateRadius, height - candidateRadius);
+    let candidateRadius = random(minRadius, maxRadius); // Propose a random radius for the new wheel.
+    let candidateX = random(candidateRadius, width - candidateRadius); // Propose a random X coordinate, ensuring the wheel is within canvas bounds.
+    let candidateY = random(candidateRadius, height - candidateRadius); // Propose a random Y coordinate, ensuring the wheel is within canvas bounds.
 
-    // Flags to track overlap and proximity to other wheels.
-    let isOverlappingTooMuch = false;
-    let hasNearbyWheel = false;
+    let isOverlappingTooMuch = false; // Flag to check if the candidate wheel overlaps excessively with existing wheels.
+    let hasNearbyWheel = false; // Flag to check if the candidate wheel is close enough to existing wheels to potentially connect.
 
-    // Check the candidate wheel against all existing wheels.
+    /**
+     * Iterate through existing wheels to check for overlaps and proximity.
+     */
     for (let other of wheels) {
-      let d = dist(candidateX, candidateY, other.x, other.y); // Distance between centers.
-      let combinedRadius = candidateRadius + other.radius;    // Sum of their radii.
+      let d = dist(candidateX, candidateY, other.x, other.y); // Calculate the distance between the center of the candidate wheel and the existing wheel.
+      let combinedRadius = candidateRadius + other.radius; // Sum of the radii of both wheels.
 
-      // Allow a controlled amount of overlap (e.g., 40% of the smaller radius)
-      // This is crucial for mimicking the dense, overlapping style of the original artwork.
-      const overlapThreshold = min(candidateRadius, other.radius) * 0.4;
+      /**
+       * Allow for some overlap, crucial for mimicking the original artwork's density.
+       * The `overlapThreshold` allows up to 40% overlap of the smaller wheel's radius.
+       * If the distance `d` is less than the combined radii minus this threshold,
+       * it means there is too much overlap, and the candidate is rejected.
+       */
+      const overlapThreshold = min(candidateRadius, other.radius) * 0.4; // Allow 40% overlap of the smaller radius.
       if (d < combinedRadius - overlapThreshold) {
         isOverlappingTooMuch = true; // Mark as excessively overlapping.
-        break; // No need to check further against other wheels.
+        break; // No need to check other wheels, this candidate is invalid.
       }
-      // Check if the candidate is close enough to an existing wheel to form a connection.
+      /**
+       * Check if the candidate wheel is within a reasonable distance to form a connection.
+       * If the distance is less than 1.5 times their combined radii, they are considered close enough.
+       */
       if (d < combinedRadius * 1.5) {
-        hasNearbyWheel = true; // Mark as having a potential neighbor.
+        hasNearbyWheel = true; // Mark as having a potential neighbor for connection.
       }
     }
 
-    // The first wheel doesn't need neighbors, so set `hasNearbyWheel` to true.
+    /**
+     * Special condition for the first wheel: it doesn't need neighbors.
+     * This ensures the very first wheel can always be placed.
+     */
     if (wheels.length === 0) {
       hasNearbyWheel = true;
     }
 
-    // If the candidate wheel doesn't overlap too much and has a nearby wheel (or is the first), add it.
+    /**
+     * If the candidate wheel is not excessively overlapping AND it has a potential neighbor
+     * (or is the first wheel), then add it to the `wheels` array.
+     */
     if (!isOverlappingTooMuch && hasNearbyWheel) {
-      // Select a random color palette for the new wheel.
-      let selectedPalette = random(colorPalettes);
-      // Ensure diversity: avoid using the same palette consecutively if possible.
+      let selectedPalette = random(colorPalettes); // Choose a random color palette for the new wheel.
+      /**
+       * To ensure visual diversity and prevent consecutive wheels from having the same palette,
+       * if the newly selected palette is identical to the last wheel's palette,
+       * re-select from the remaining palettes.
+       */
       if (wheels.length > 0 && selectedPalette === wheels[wheels.length - 1].colors) {
-        selectedPalette = random(colorPalettes.filter(p => p !== selectedPalette));
+          selectedPalette = random(colorPalettes.filter(p => p !== selectedPalette));
       }
-      wheels.push(new Wheel(candidateX, candidateY, candidateRadius, selectedPalette));
+      wheels.push(new Wheel(candidateX, candidateY, candidateRadius, selectedPalette)); // Create and add a new Wheel object.
     }
-    currentAttempts++; // Increment attempt counter.
+    currentAttempts++; // Increment the attempt counter.
   }
 
-  // Log a message if not all wheels could be placed within the maximum attempts.
+  /**
+   * Log a message if the maximum number of attempts was reached, indicating
+   * that not all target wheels could be placed successfully within the constraints.
+   */
   if (currentAttempts >= maxAttempts) {
     console.log("Could not place all wheels within limits.");
   }
 
   /**
-   * Step 4: Generate connectors between nearby wheels.
-   * This nested loop checks all pairs of wheels and creates a connector if they are close enough.
+   * Generate connectors between nearby wheels.
+   * This nested loop iterates through all pairs of wheels to determine if a connection should be drawn.
+   * The connection logic is inspired by similar artistic implementations.
    */
   for (let i = 0; i < wheels.length; i++) {
-    for (let j = i + 1; j < wheels.length; j++) { // Start from i + 1 to avoid duplicate connections and self-connections.
-      let w1 = wheels[i];
-      let w2 = wheels[j];
-      let d = dist(w1.x, w1.y, w2.x, w2.y); // Calculate distance between wheel centers.
-
-      // Connect wheels if their distance is within 1.3 times their combined radii.
-      // This allows for connections even with small gaps or slight overlaps.
+    for (let j = i + 1; j < wheels.length; j++) { // Start `j` from `i + 1` to avoid duplicate connections and connecting a wheel to itself.
+      let w1 = wheels[i]; // Get the first wheel.
+      let w2 = wheels[j]; // Get the second wheel.
+      let d = dist(w1.x, w1.y, w2.x, w2.y); // Calculate the distance between the centers of the two wheels.
+      /**
+       * Connect wheels if they are within a certain range.
+       * A connection is made if the distance between wheel centers is less than
+       * 1.3 times their combined radii. This allows for connections even with
+       * slight gaps or overlaps, mimicking the original artwork's organic connections.
+       */
       if (d < (w1.radius + w2.radius) * 1.3) {
-        // Create a new Connector object and add it to the `connectors` array.
-        // A random color from a palette is chosen for the connector.
+        // Create a new Connector object, passing the two wheels and a random base color for the connector.
+        // A random color from any palette's base color is chosen to give variety to the connectors.
         connectors.push(new Connector(w1, w2, random(colorPalettes)[0]));
       }
     }
   }
 }
 
+---
 
-// --- Wheel Class ---
+### Wheel Class
 
 /**
- * @class Wheel
- * @description Represents a single circular wheel in the artwork.
- * Each wheel has a position, radius, a specific color palette, and properties
- * to manage its interactive state (blown away or visible).
+ * The `Wheel` class represents an individual circular design element
+ * inspired by Pacita Abad's "Wheels of Fortune." Each wheel has a position,
+ * radius, and a unique color palette to draw its various concentric and radial components.
  */
 class Wheel {
   /**
-   * @constructor
+   * Constructs a new `Wheel` object.
    * @param {number} x - The x-coordinate of the wheel's center.
    * @param {number} y - The y-coordinate of the wheel's center.
    * @param {number} radius - The radius of the wheel.
-   * @param {Array<string>} palette - An array of hex color strings for different wheel components.
+   * @param {string[]} palette - An array of color strings to be used for different parts of the wheel.
    */
   constructor(x, y, radius, palette) {
     this.x = x;
     this.y = y;
     this.radius = radius;
-    this.colors = palette; // The assigned color palette for this wheel.
-    this.stemAngle = random(TWO_PI); // Random angle for a small decorative "stem."
-
-    /**
-     * @property {boolean} isBlownAway - Controls whether the wheel's internal patterns (spokes, outer dots) are drawn.
-     * When `true`, these elements disappear, simulating the "blown away" effect.
-     * Default is `false` (visible).
-     */
-    this.isBlownAway = false;
-
-    /**
-     * @property {number} innerAlpha - The current alpha (transparency) value for the wheel's inner patterns.
-     * This is used for the fade-in animation when a wheel is restored.
-     * Ranges from 0 (fully transparent) to 255 (fully opaque).
-     */
-    this.innerAlpha = 0;
-
-    /**
-     * @property {number} targetInnerAlpha - The desired final alpha value for the inner patterns (always 255).
-     */
-    this.targetInnerAlpha = 255;
-
-    /**
-     * @property {number} fadeSpeed - The increment by which `innerAlpha` changes each frame.
-     * A higher value means a faster fade-in effect.
-     */
-    this.fadeSpeed = 5;
+    this.colors = palette; // Assign the provided color palette to this wheel.
+    this.stemAngle = random(TWO_PI); // Initialize a random angle for the single 'stem' or decorative element on the wheel.
   }
 
   /**
-   * `display()` draws all components of the wheel on the canvas.
-   * It uses `push()` and `pop()` to isolate transformations (like `translate`).
+   * `display()` renders the wheel on the canvas.
+   * It uses `push()` and `pop()` to isolate transformations (like `translate`)
+   * applied to this specific wheel, ensuring they don't affect other drawing elements.
    */
   display() {
-    push(); // Save the current drawing state.
-    translate(this.x, this.y); // Move the origin to the wheel's center.
+    push(); // Save the current drawing style settings and transformations.
+    translate(this.x, this.y); // Move the origin to the center of the wheel for easier drawing.
 
-    // Draw layers from back to front to ensure correct visual stacking.
+    // The order of drawing functions ensures correct layering from back to front.
     this.drawBaseCircle();
-
-    /**
-     * Only draw the outer dots and spokes if the wheel is NOT in the "blown away" state.
-     * This condition directly controls their visibility.
-     */
-    if (!this.isBlownAway) {
-      this.drawOuterDots();
-      this.drawSpokes();
-    }
-
+    this.drawOuterDots();
+    this.drawSpokes();
     this.drawInnerCircles();
-    this.drawStem(); // This element is always drawn as it's part of the base structure.
+    this.drawStem(); // This could represent a decorative element or a symbolic connection point.
 
-    pop(); // Restore the previous drawing state.
+    pop(); // Restore the previous drawing style settings and transformations.
   }
 
   /**
-   * `updateAlpha()` manages the fade-in animation of the wheel's internal patterns.
-   * This method is called in the main `draw` loop for every wheel.
-   */
-  updateAlpha() {
-    if (this.isBlownAway) {
-      // If the wheel is blown away, its inner patterns should be invisible.
-      this.innerAlpha = 0;
-    } else {
-      // If the wheel is not blown away (i.e., it's visible or returning),
-      // gradually increase its inner pattern alpha towards full opacity.
-      if (this.innerAlpha < this.targetInnerAlpha) {
-        // `min()` ensures `innerAlpha` does not exceed `targetInnerAlpha`.
-        this.innerAlpha = min(this.innerAlpha + this.fadeSpeed, this.targetInnerAlpha);
-      }
-    }
-  }
-
-  /**
-   * `drawBaseCircle()` draws the largest, solid circle that forms the foundation of the wheel.
+   * Draws the largest, base circle of the wheel.
+   * This forms the primary background shape of the wheel.
    */
   drawBaseCircle() {
-    noStroke(); // No outline for the circle.
-    fill(this.colors[0]); // Use the first color from the assigned palette.
-    circle(0, 0, this.radius * 2); // Draw a circle centered at the origin (due to `translate`).
+    noStroke(); // Disable drawing outlines for this shape.
+    fill(this.colors[0]); // Use the first color from the assigned palette for the base circle.
+    circle(0, 0, this.radius * 2); // Draw a circle centered at the current origin (0,0) with the specified diameter.
   }
 
   /**
-   * `drawOuterDots()` draws a ring of small dots near the outer edge of the wheel.
-   * Their transparency is controlled by `innerAlpha` for the fade-in effect.
+   * Draws a ring of small dots around the outer edge of the wheel.
+   * These dots add a decorative, textural detail.
    */
   drawOuterDots() {
-    const dotCount = 40;        // Number of dots in the ring.
-    const dotRadius = this.radius * 0.9; // Radial distance of dots from the center.
-    const dotSize = this.radius * 0.08;  // Size of individual dots.
-
-    // Get the base color for outer dots and apply the current `innerAlpha` to its transparency.
-    let dotColor = color(this.colors[1]);
-    dotColor.setAlpha(this.innerAlpha);
-    fill(dotColor); // Set the fill color with dynamic alpha.
-    noStroke();     // No outline for the dots.
-
-    // Loop to draw each individual dot around the circle.
+    const dotCount = 40; // Number of dots in the outer ring.
+    const dotRadius = this.radius * 0.9; // The radius at which the dots are placed, relative to the wheel's radius.
+    const dotSize = this.radius * 0.08; // The size of individual dots.
+    fill(this.colors[1]); // Use the second color from the palette for these dots.
+    noStroke(); // Disable outlines.
     for (let i = 0; i < dotCount; i++) {
-      const angle = map(i, 0, dotCount, 0, TWO_PI); // Calculate angle for even distribution.
-      const dx = cos(angle) * dotRadius;           // X offset from center.
-      const dy = sin(angle) * dotRadius;           // Y offset from center.
-      circle(dx, dy, dotSize); // Draw the dot.
+      const angle = map(i, 0, dotCount, 0, TWO_PI); // Calculate the angle for each dot, distributing them evenly around a circle.
+      const dx = cos(angle) * dotRadius; // Calculate the x-offset for the dot.
+      const dy = sin(angle) * dotRadius; // Calculate the y-offset for the dot.
+      circle(dx, dy, dotSize); // Draw the dot at its calculated position.
     }
   }
 
   /**
-   * `drawSpokes()` draws radiating lines (spokes) from the center towards the outer part of the wheel.
-   * Their transparency is controlled by `innerAlpha` for the fade-in effect.
+   * Draws the spokes radiating from the center of the wheel.
+   * These provide structural and decorative elements within the wheel.
    */
   drawSpokes() {
-    const spokeCount = 24;       // Number of spokes.
-    const innerRadius = this.radius * 0.55; // Inner radial start point of spokes.
-    const outerRadius = this.radius * 0.8;  // Outer radial end point of spokes.
-
-    // Get the base color for spokes and apply the current `innerAlpha` to its transparency.
-    let spokeColor = color(this.colors[3]);
-    spokeColor.setAlpha(this.innerAlpha);
-    stroke(spokeColor);         // Set the stroke color with dynamic alpha.
-    strokeWeight(this.radius * 0.03); // Set the thickness of the spokes.
-
-    // Loop to draw each individual spoke.
+    const spokeCount = 24; // Number of spokes.
+    const innerRadius = this.radius * 0.55; // The inner radius where spokes begin.
+    const outerRadius = this.radius * 0.8; // The outer radius where spokes end.
+    stroke(this.colors[3]); // Use the fourth color from the palette for the spokes.
+    strokeWeight(this.radius * 0.03); // Set the thickness of the spokes, relative to the wheel's radius.
     for (let i = 0; i < spokeCount; i++) {
-      const angle = map(i, 0, spokeCount, 0, TWO_PI); // Calculate angle for even distribution.
-      const x1 = cos(angle) * innerRadius;           // Inner X coordinate.
-      const y1 = sin(angle) * innerRadius;           // Inner Y coordinate.
-      const x2 = cos(angle) * outerRadius;           // Outer X coordinate.
-      const y2 = sin(angle) * outerRadius;           // Outer Y coordinate.
-      line(x1, y1, x2, y2); // Draw the line segment for the spoke.
+      const angle = map(i, 0, spokeCount, 0, TWO_PI); // Calculate the angle for each spoke.
+      const x1 = cos(angle) * innerRadius; // Start x-coordinate of the spoke.
+      const y1 = sin(angle) * innerRadius; // Start y-coordinate of the spoke.
+      const x2 = cos(angle) * outerRadius; // End x-coordinate of the spoke.
+      const y2 = sin(angle) * outerRadius; // End y-coordinate of the spoke.
+      line(x1, y1, x2, y2); // Draw a line representing the spoke.
     }
   }
 
   /**
-   * `drawInnerCircles()` draws multiple concentric circles and an inner ring of dots.
-   * These are always visible, as they are part of the core structure, not the "blown away" elements.
+   * Draws multiple concentric inner circles and a ring of inner dots.
+   * These layers add depth and intricate detail to the center of the wheel.
    */
   drawInnerCircles() {
-    noStroke(); // No outline for these circles.
+    noStroke(); // Disable outlines for the inner circles.
 
-    // First inner circle.
-    fill(this.colors[2]);
-    circle(0, 0, this.radius * 0.6);
+    fill(this.colors[2]); // Use the third color for the first inner circle.
+    circle(0, 0, this.radius * 0.6); // Draw a circle at the center with a specific size.
 
-    // Inner ring of dots.
-    fill(this.colors[3]);
-    const innerDotCount = 20;
-    const innerDotRadius = this.radius * 0.4;
-    const innerDotSize = this.radius * 0.06;
+    fill(this.colors[3]); // Use the fourth color for the ring of inner dots.
+    const innerDotCount = 20; // Number of inner dots.
+    const innerDotRadius = this.radius * 0.4; // The radius at which these dots are placed.
+    const innerDotSize = this.radius * 0.06; // The size of individual inner dots.
     for (let i = 0; i < innerDotCount; i++) {
-      const angle = map(i, 0, innerDotCount, 0, TWO_PI);
-      const dx = cos(angle) * innerDotRadius;
-      const dy = sin(angle) * innerDotRadius;
-      circle(dx, dy, innerDotSize);
+      const angle = map(i, 0, innerDotCount, 0, TWO_PI); // Calculate the angle for each inner dot.
+      const dx = cos(angle) * innerDotRadius; // Calculate x-offset.
+      const dy = sin(angle) * innerDotRadius; // Calculate y-offset.
+      circle(dx, dy, innerDotSize); // Draw the inner dot.
     }
 
-    // Second inner circle.
-    fill(this.colors[4]);
-    circle(0, 0, this.radius * 0.3);
+    fill(this.colors[4]); // Use the fifth color for the second inner circle.
+    circle(0, 0, this.radius * 0.3); // Draw a smaller circle at the center.
 
-    // Smallest center circle.
-    fill(this.colors[0]); // Reusing the base color.
-    circle(0, 0, this.radius * 0.15);
+    fill(this.colors[0]); // Reuse the first color for the smallest, innermost center circle.
+    circle(0, 0, this.radius * 0.15); // Draw the smallest circle at the very center.
   }
 
   /**
-   * `drawStem()` draws a small, curved line with a dot at its end,
-   * resembling a decorative stem emanating from the wheel's center.
+   * Draws a single, curved "stem" or decorative element radiating from the wheel's center.
+   * This element adds asymmetry and a dynamic visual flair.
    */
   drawStem() {
-    stroke(this.colors[1]); // Use the second color from the palette for the stem.
+    stroke(this.colors[1]); // Use the second color from the palette for the stem's outline.
     strokeWeight(this.radius * 0.04); // Set the thickness of the stem.
-    noFill(); // The stem is a line, so no fill.
-
-    // Calculate start, end, and control points for a quadratic Bezier curve.
-    // The start point is slightly offset from the center.
-    const startX = cos(this.stemAngle) * (this.radius * 0.075);
-    const startY = sin(this.stemAngle) * (this.radius * 0.075);
-    // The end point is further out.
-    const endX = cos(this.stemAngle) * (this.radius * 0.5);
-    const endY = sin(this.stemAngle) * (this.radius * 0.5);
-    // The control point creates the curve, offset by an angle.
+    noFill(); // Do not fill the shape, only draw its outline.
+    const startX = cos(this.stemAngle) * (this.radius * 0.075); // Calculate the stem's start x-coordinate (slightly off-center).
+    const startY = sin(this.stemAngle) * (this.radius * 0.075); // Calculate the stem's start y-coordinate.
+    const endX = cos(this.stemAngle) * (this.radius * 0.5); // Calculate the stem's end x-coordinate.
+    const endY = sin(this.stemAngle) * (this.radius * 0.5); // Calculate the stem's end y-coordinate.
+    // Calculate control points for a quadratic Bezier curve to create a subtle curve for the stem.
     const controlX = cos(this.stemAngle + 0.5) * (this.radius * 0.4);
     const controlY = sin(this.stemAngle + 0.5) * (this.radius * 0.4);
 
-    beginShape();          // Start defining a custom shape.
-    vertex(startX, startY); // Define the starting point.
-    quadraticVertex(controlX, controlY, endX, endY); // Define the quadratic Bezier curve.
-    endShape();            // End the shape definition.
+    beginShape(); // Begin defining a custom shape.
+    vertex(startX, startY); // Define the starting point of the curve.
+    quadraticVertex(controlX, controlY, endX, endY); // Define the quadratic Bezier curve using a control point and an end point.
+    endShape(); // End the shape definition.
 
-    noStroke();           // No outline for the final dot.
-    fill(this.colors[1]); // Fill the dot with the stem's color.
-    circle(endX, endY, this.radius * 0.08); // Draw a circle at the end of the stem.
-  }
-
-  /**
-   * `contains(px, py)` checks if a given point (e.g., mouse coordinates) is within the wheel's bounds.
-   * @param {number} px - The x-coordinate of the point to check.
-   * @param {number} py - The y-coordinate of the point to check.
-   * @returns {boolean} `true` if the point is inside the wheel, `false` otherwise.
-   */
-  contains(px, py) {
-    let d = dist(px, py, this.x, this.y); // Calculate distance from the point to the wheel's center.
-    return d < this.radius; // If distance is less than radius, the point is inside.
+    noStroke(); // Disable outline for the small circle at the end of the stem.
+    fill(this.colors[1]); // Fill with the same color as the stem.
+    circle(endX, endY, this.radius * 0.08); // Draw a small circle at the end of the stem.
   }
 }
 
+---
 
-// --- Connector Class ---
+### Connector Class
 
 /**
- * @class Connector
- * @description Represents a visual link between two Wheel objects.
- * It draws a line with decorative "chain links" and a central blob,
- * inspired by the intricate connections in the original artwork.
+ * The `Connector` class represents a connection line between two `Wheel` objects.
+ * It's designed to visually link wheels, creating a network or "chain-like" effect,
+ * similar to the intricate connections found in Pacita Abad's "Wheels of Fortune."
+ * Connectors include a main line, small "chain links," and a central decorative blob.
  */
 class Connector {
   /**
-   * @constructor
-   * @param {Wheel} wheel1 - The first Wheel object to connect.
-   * @param {Wheel} wheel2 - The second Wheel object to connect.
-   * @param {string} connectColor - The color to use for the connector line and some decorations.
+   * Constructs a new `Connector` object.
+   * @param {Wheel} wheel1 - The first `Wheel` object to connect.
+   * @param {Wheel} wheel2 - The second `Wheel` object to connect.
+   * @param {string} connectColor - The color to be used for the main connector line and some decorative elements.
    */
   constructor(wheel1, wheel2, connectColor) {
-    this.w1 = wheel1; // Reference to the first wheel.
-    this.w2 = wheel2; // Reference to the second wheel.
-    this.color = connectColor; // Color for the connector.
+    this.w1 = wheel1; // Store a reference to the first wheel.
+    this.w2 = wheel2; // Store a reference to the second wheel.
+    this.color = connectColor; // Assign the specified color for the connector.
 
-    // Pre-calculate angle and start/end points for drawing efficiency.
-    // The angle is from wheel1 to wheel2.
-    this.angle = atan2(this.w2.y - this.w1.y, this.w2.x - this.w1.x);
-    // The start point is on the circumference of wheel1, facing wheel2.
+    /**
+     * Pre-calculate the angle and exact start/end points for drawing the connection line.
+     * This avoids recalculating these values in every `display()` call, improving performance.
+     */
+    this.angle = atan2(this.w2.y - this.w1.y, this.w2.x - this.w1.x); // Calculate the angle from wheel1 to wheel2.
     this.startPoint = createVector(
-      this.w1.x + cos(this.angle) * this.w1.radius,
+      this.w1.x + cos(this.angle) * this.w1.radius, // Calculate the point on the edge of wheel1 closest to wheel2.
       this.w1.y + sin(this.angle) * this.w1.radius
     );
-    // The end point is on the circumference of wheel2, facing wheel1 (angle + PI).
     this.endPoint = createVector(
-      this.w2.x + cos(this.angle + PI) * this.w2.radius,
+      this.w2.x + cos(this.angle + PI) * this.w2.radius, // Calculate the point on the edge of wheel2 closest to wheel1 (angle + PI reverses direction).
       this.w2.y + sin(this.angle + PI) * this.w2.radius
     );
   }
 
   /**
-   * `display()` draws the connector, including the main line, chain links, and central blob.
+   * `display()` renders the connector on the canvas, including its main line
+   * and various decorative "chain-like" and central elements.
    */
   display() {
-    stroke(this.color);     // Set the stroke color for the connector.
-    strokeWeight(5);        // Make the line thicker for better visibility.
-    noFill();               // No fill for the main connection line.
+    stroke(this.color); // Set the stroke color for the main line and outlines.
+    strokeWeight(5); // Set the thickness of the main line for visibility.
+    noFill(); // Ensure shapes are not filled by default.
 
-    /**
-     * Step 1: Draw the main connection line.
-     * This line connects the outer edges of the two wheels.
-     */
+    // Draw the main connection line between the two wheels.
     line(this.startPoint.x, this.startPoint.y, this.endPoint.x, this.endPoint.y);
 
     /**
-     * Step 2: Add decorative chain-link elements along the line.
-     * This creates a more intricate, mechanical, or jewelry-like feel, similar to Abad's style.
+     * Add decorative elements for a chain-like effect, inspired by the original artwork's details.
+     * Calculate midpoint and distance for placing central and distributed elements.
      */
-    let midX = (this.startPoint.x + this.endPoint.x) / 2; // Midpoint X for central blob.
-    let midY = (this.startPoint.y + this.endPoint.y) / 2; // Midpoint Y for central blob.
+    let midX = (this.startPoint.x + this.endPoint.x) / 2; // Midpoint x-coordinate.
+    let midY = (this.startPoint.y + this.endPoint.y) / 2; // Midpoint y-coordinate.
     let distBetweenWheels = dist(this.startPoint.x, this.startPoint.y, this.endPoint.x, this.endPoint.y); // Total length of the connector.
 
-    const linkSize = 10; // Size of individual chain links.
-    // Calculate the number of links to evenly space them along the connector.
-    const numLinks = floor(distBetweenWheels / (linkSize * 1.5));
+    /**
+     * Draw small circles to represent chain links along the connection line.
+     */
+    const linkSize = 10; // Size of each individual chain link circle.
+    const numLinks = floor(distBetweenWheels / (linkSize * 1.5)); // Calculate how many links can fit, with some spacing.
     if (numLinks > 0) { // Only draw links if there's enough space.
       for (let i = 0; i <= numLinks; i++) {
-        let lerpAmount = map(i, 0, numLinks, 0, 1); // Get a value between 0 and 1 for linear interpolation.
-        let linkX = lerp(this.startPoint.x, this.endPoint.x, lerpAmount); // Calculate link X position.
-        let linkY = lerp(this.startPoint.y, this.endPoint.y, lerpAmount); // Calculate link Y position.
+        let lerpAmount = map(i, 0, numLinks, 0, 1); // Calculate interpolation amount to distribute links evenly.
+        let linkX = lerp(this.startPoint.x, this.endPoint.x, lerpAmount); // Interpolate x-coordinate for the link.
+        let linkY = lerp(this.startPoint.y, this.endPoint.y, lerpAmount); // Interpolate y-coordinate for the link.
 
+        // Draw the outer part of the chain link.
         fill(255, 200, 100); // Yellow-orange color for the links.
-        stroke(this.color);  // Outline matching the connector line.
-        strokeWeight(1);     // Thin outline for links.
-        circle(linkX, linkY, linkSize); // Draw the link (a small circle).
+        stroke(this.color); // Link outline matches the connector color.
+        strokeWeight(1); // Thin outline for links.
+        circle(linkX, linkY, linkSize); // Draw the outer link circle.
 
-        fill(0);             // Tiny inner dot for more detail.
-        noStroke();
-        circle(linkX, linkY, linkSize * 0.4);
+        // Optional: Add a tiny inner dot for more detail on each link.
+        fill(0); // Black fill for the inner dot.
+        noStroke(); // No outline for the inner dot.
+        circle(linkX, linkY, linkSize * 0.4); // Draw the inner dot.
       }
     }
 
     /**
-     * Step 3: Draw a decorative central blob.
-     * This adds a focal point or a "joint" where the connector might pivot.
+     * Draw a decorative central blob, similar to connecting points in original artwork.
      */
-    fill(255, 255, 255); // White base for the blob.
-    stroke(this.color);  // Border matching the connection line.
-    strokeWeight(3);     // Medium thickness border.
-    circle(midX, midY, 20); // Larger central circle.
+    fill(255, 255, 255); // White base for the central blob.
+    stroke(this.color); // Border color matches the connection line.
+    strokeWeight(3); // Moderate thickness for the border.
+    circle(midX, midY, 20); // Draw the larger outer circle of the central blob.
 
-    fill(this.color); // Inner color matching connection.
-    noStroke();
-    circle(midX, midY, 10); // Smaller inner circle.
+    fill(this.color); // Inner color matching the connection line.
+    noStroke(); // No outline for the inner circle.
+    circle(midX, midY, 10); // Draw the smaller inner circle of the central blob.
 
     /**
-     * Step 4: Draw radiating dots around the central blob.
-     * These add a burst or energy effect around the central connection point.
+     * Draw radiating dots around the central blob for additional detail.
      */
-    fill(255, 200, 100); // Yellow-orange for small dots.
-    noStroke();
-    const numSmallDots = 8;        // Number of radiating dots.
-    const smallDotRadius = 15;     // Radial distance of these dots from the blob center.
-    const smallDotSize = 4;        // Size of these small dots.
+    fill(255, 200, 100); // Yellow-orange for these small dots.
+    noStroke(); // No outline for these dots.
+    const numSmallDots = 8; // Number of radiating dots.
+    const smallDotRadius = 15; // Radius at which these dots are placed from the center blob.
+    const smallDotSize = 4; // Size of these small dots.
     for (let i = 0; i < numSmallDots; i++) {
-      let angle = map(i, 0, numSmallDots, 0, TWO_PI); // Calculate angle for even distribution.
-      let dx = midX + cos(angle) * smallDotRadius;   // X offset.
-      let dy = midY + sin(angle) * smallDotRadius;   // Y offset.
-      circle(dx, dy, smallDotSize); // Draw the small dot.
-    }
-  }
-}
-
-// --- DandelionParticle Class ---
-
-/**
- * @class DandelionParticle
- * @description Represents an individual particle (a spoke or an outer dot)
- * that detaches from a wheel and animates away or returns.
- * This class is key to the interactive "dandelion" and "rewind" effects.
- */
-class DandelionParticle {
-  /**
-   * @constructor
-   * @param {number} x - Initial x-coordinate of the particle.
-   * @param {number} y - Initial y-coordinate of the particle.
-   * @param {string} type - The type of particle ('spoke' or 'outerDot'), determining its drawing method.
-   * @param {string} color - The base color of the particle.
-   * @param {number} size - The initial size of the particle.
-   * @param {number} targetX - The x-coordinate where the particle should return (original position on wheel).
-   * @param {number} targetY - The y-coordinate where the particle should return (original position on wheel).
-   * @param {number} [initialAngle=0] - Optional initial rotation angle for 'spoke' particles.
-   */
-  constructor(x, y, type, color, size, targetX, targetY, initialAngle = 0) {
-    this.x = x;
-    this.y = y;
-    this.type = type; // 'spoke' or 'outerDot'.
-    this.color = color;
-    this.size = size;
-    this.alpha = 255; // Initial alpha: fully opaque.
-
-    // Store original and target positions for the return animation.
-    this.originalX = x; // The point where the particle started its journey.
-    this.originalY = y;
-    this.targetX = targetX; // The precise location on the wheel it came from.
-    this.targetY = targetY;
-
-    // Initial velocity: particles fly towards the bottom-left to simulate being "blown."
-    this.vel = p5.Vector.fromAngle(random(PI + PI / 4, PI + PI / 2)); // Angle range (135 to 180 degrees).
-    this.vel.mult(random(1, 3)); // Random initial speed.
-
-    this.rotation = initialAngle; // Initial rotation for spokes.
-    this.rotationSpeed = random(-0.05, 0.05); // Random rotation speed for spokes.
-    this.windX = random(-0.05, -0.2); // Gentle horizontal wind (leftward).
-    this.windY = random(0.05, 0.2); // Gentle vertical wind (downward).
-
-    /**
-     * @property {boolean} isReturning - A flag to control the particle's behavior.
-     * When `true`, the particle animates back towards its `targetX`, `targetY`.
-     * Default is `false` (flying away).
-     */
-    this.isReturning = false;
-
-    /**
-     * @property {number} returnSpeed - The speed at which the particle `lerps` (linearly interpolates)
-     * back to its target position when `isReturning` is `true`.
-     */
-    this.returnSpeed = 0.05;
-  }
-
-  /**
-   * `update()` calculates the particle's new state (position, size, alpha) each frame.
-   * It has different logic based on whether the particle is flying away or returning.
-   */
-  update() {
-    if (this.isReturning) {
-      /**
-       * If the particle is returning:
-       * - It `lerps` (moves smoothly) from its current position towards its `targetX`, `targetY`.
-       * - Its `alpha` also `lerps` towards 0, making it fade out as it approaches the wheel,
-       * simulating it re-merging with the wheel's pattern.
-       * - Its `size` smoothly returns to its original size (though it then fades).
-       * - Its `rotationSpeed` slows down to 0.
-       */
-      this.x = lerp(this.x, this.targetX, this.returnSpeed);
-      this.y = lerp(this.y, this.targetY, this.returnSpeed);
-      this.alpha = lerp(this.alpha, 0, this.returnSpeed * 2); // Fade out faster.
-      this.size = lerp(this.size, (this.type === 'spoke' ? this.size / 5 : this.size), this.returnSpeed * 2); // Restore size.
-      this.rotationSpeed = lerp(this.rotationSpeed, 0, 0.05); // Stop rotation.
-
-    } else {
-      /**
-       * If the particle is flying away:
-       * - Its position is updated by its current velocity.
-       * - Wind forces are continuously applied to its velocity.
-       * - Its `rotation` is updated by `rotationSpeed` (for spokes).
-       * - Its `alpha` gradually decreases (fades out).
-       * - Its `size` slightly shrinks over time.
-       */
-      this.x += this.vel.x;
-      this.y += this.vel.y;
-      this.vel.add(this.windX, this.windY); // Apply wind force.
-
-      this.rotation += this.rotationSpeed; // Update rotation for spokes.
-
-      this.alpha -= 2; // Fade out over time.
-      this.size *= 0.99; // Shrink slightly.
-    }
-  }
-
-  /**
-   * `display()` draws the particle on the canvas at its current state.
-   */
-  display() {
-    push(); // Save the current drawing state.
-    translate(this.x, this.y); // Move origin to particle's position.
-    rotate(this.rotation);     // Apply rotation (mainly for spokes).
-    noStroke();                // No outline for dots.
-
-    // Set fill color with current alpha.
-    fill(red(this.color), green(this.color), blue(this.color), this.alpha);
-
-    // Draw based on particle type.
-    if (this.type === 'outerDot' || this.type === 'innerDot') {
-      circle(0, 0, this.size); // Draw a circle for dots.
-    } else if (this.type === 'spoke') {
-      // Draw a line segment for spokes.
-      stroke(red(this.color), green(this.color), blue(this.color), this.alpha); // Stroke color with alpha.
-      strokeWeight(this.size * 0.3); // Adjust stroke weight for visibility.
-      line(0, 0, this.size, 0); // Draw a line from origin, which is then rotated.
-    }
-    pop(); // Restore the previous drawing state.
-  }
-}
-
-
-// --- Event Handlers ---
-
-/**
- * `mousePressed()` is a p5.js function that is called once every time a mouse button is pressed.
- * This function handles the "dandelion" effect when a wheel is clicked.
- */
-function mousePressed() {
-  /**
-   * Step 1: Iterate through wheels to check for a click.
-   * Iterate in reverse to process the top-most (last drawn) wheels first in case of overlap.
-   */
-  for (let i = wheels.length - 1; i >= 0; i--) {
-    let wheel = wheels[i];
-    /**
-     * Step 2: Check if the mouse click is within a wheel and if that wheel is not already "blown away."
-     * `wheel.contains(mouseX, mouseY)` uses a helper method to detect the click area.
-     */
-    if (wheel.contains(mouseX, mouseY) && !wheel.isBlownAway) {
-      /**
-       * Step 3: Identify all wheels that share the same base color as the clicked wheel
-       * and are not already "blown away." These wheels will also be affected.
-       */
-      const clickedWheelBaseColor = wheel.colors[0];
-      const wheelsToBlow = wheels.filter(w => w.colors[0] === clickedWheelBaseColor && !w.isBlownAway);
-
-      if (wheelsToBlow.length > 0) {
-        /**
-         * Step 4: Record the "blown away" event in `blownAwayHistory`.
-         * We store references to the actual wheel objects. This allows the spacebar
-         * to "undo" this action by restoring these specific wheels.
-         */
-        blownAwayHistory.push(wheelsToBlow.map(w => w));
-
-        /**
-         * Step 5: Process each wheel that needs to be "blown away."
-         */
-        for (const w of wheelsToBlow) {
-          w.isBlownAway = true; // Mark the wheel as "blown away," making its internal patterns disappear.
-          w.innerAlpha = 0;     // Immediately set the inner pattern alpha to 0 for a quick disappearance.
-
-          /**
-           * Step 6: Generate dandelion particles for the wheel's spokes.
-           * Each spoke is converted into a `DandelionParticle` object.
-           */
-          const spokeCount = 24;
-          const innerRadius = w.radius * 0.55;
-          const outerRadius = w.radius * 0.8;
-          const spokeColor = w.colors[3]; // Spokes color from palette.
-          const spokeSize = w.radius * 0.03; // Base size for spoke particles.
-
-          for (let j = 0; j < spokeCount; j++) {
-            const angle = map(j, 0, spokeCount, 0, TWO_PI);
-            // Particles start at the outer end of where the spoke was.
-            const startX = w.x + cos(angle) * outerRadius;
-            const startY = w.y + sin(angle) * outerRadius;
-            // The target is its original position for returning.
-            const targetX = w.x + cos(angle) * outerRadius;
-            const targetY = w.y + sin(angle) * outerRadius;
-            dandelionParticles.push(new DandelionParticle(startX, startY, 'spoke', spokeColor, spokeSize * 5, targetX, targetY, angle));
-          }
-
-          /**
-           * Step 7: Generate dandelion particles for the wheel's outer dots.
-           * Each outer dot is also converted into a `DandelionParticle` object.
-           */
-          const dotCount = 40;
-          const dotRadius = w.radius * 0.9;
-          const dotColor = w.colors[1]; // Outer dots color from palette.
-          const dotSize = w.radius * 0.08; // Base size for dot particles.
-
-          for (let j = 0; j < dotCount; j++) {
-            const angle = map(j, 0, dotCount, 0, TWO_PI);
-            const dx = w.x + cos(angle) * dotRadius;
-            const dy = w.y + sin(angle) * dotRadius;
-            // The target is its original position for returning.
-            const targetX = w.x + cos(angle) * dotRadius;
-            const targetY = w.y + sin(angle) * dotRadius;
-            dandelionParticles.push(new DandelionParticle(dx, dy, 'outerDot', dotColor, dotSize, targetX, targetY));
-          }
-        }
-      }
-      break; // Only process one wheel click at a time to avoid multiple effects from one click.
+      let angle = map(i, 0, numSmallDots, 0, TWO_PI); // Calculate angle for each dot.
+      let dx = midX + cos(angle) * smallDotRadius; // Calculate x-position relative to midpoint.
+      let dy = midY + sin(angle) * smallDotRadius; // Calculate y-position relative to midpoint.
+      circle(dx, dy, smallDotSize); // Draw the radiating dot.
     }
   }
 }
 
 /**
- * `keyPressed()` is a p5.js function that is called once every time a key is pressed.
- * This function handles the "rewind" effect when the spacebar is pressed.
- */
-function keyPressed() {
-  /**
-   * Step 1: Check if the pressed key is the spacebar.
-   * `keyCode === 32` corresponds to the spacebar.
-   */
-  if (keyCode === 32) {
-    /**
-     * Step 2: Check if there are any "blown away" events in the history.
-     * `blownAwayHistory.length > 0` ensures there's something to undo.
-     */
-    if (blownAwayHistory.length > 0) {
-      /**
-       * Step 3: Retrieve the last group of wheels that were blown away.
-       * `blownAwayHistory.pop()` removes and returns the last element from the array,
-       * ensuring restoration happens in reverse order of disappearance ("from back to front").
-       */
-      const wheelsToRestore = blownAwayHistory.pop();
-
-      /**
-       * Step 4: Restore each wheel in the retrieved group.
-       */
-      for (const w of wheelsToRestore) {
-        w.isBlownAway = false; // Set the wheel back to "not blown away," enabling its pattern to reappear.
-        w.innerAlpha = 0;     // Explicitly set alpha to 0 to start the fade-in animation from transparent.
-
-        /**
-         * Step 5: Animate associated dandelion particles back to the wheel.
-         * Filter `dandelionParticles` to find those that belong to the current wheel being restored.
-         * The `dist` check uses the particle's `targetX`/`targetY` (original position on the wheel)
-         * to accurately identify which particles belong to which wheel.
-         */
-        const particlesToReturn = dandelionParticles.filter(p =>
-          // For spoke particles, check proximity to their original spoke end.
-          (p.type === 'spoke' && dist(p.targetX, p.targetY, w.x + cos(p.rotation) * w.radius * 0.8, w.y + sin(p.rotation) * w.radius * 0.8) < 10) ||
-          // For outer dot particles, check proximity to their original dot position.
-          (p.type === 'outerDot' && dist(p.targetX, p.targetY, w.x + cos(atan2(p.targetY - w.y, p.targetX - w.x)) * w.radius * 0.9, w.y + sin(atan2(p.targetY - w.y, p.targetX - w.x)) * w.radius * 0.9) < 10)
-        );
-
-        for (const p of particlesToReturn) {
-          p.isReturning = true; // Set the flag to initiate the return animation.
-          // Set `originalX` and `originalY` to the particle's *current* position,
-          // so the `lerp` function can animate it smoothly from where it is now.
-          p.originalX = p.x;
-          p.originalY = p.y;
-          // Particles will fade out as they return (alpha lerps to 0),
-          // simulating them merging back into the wheel's pattern.
-        }
-      }
-    }
-  }
-}
-
-/**
- * `windowResized()` is a p5.js function that is called automatically whenever the browser window is resized.
- * This ensures the canvas adapts to the new window dimensions.
+ * `windowResized()` is a p5.js built-in function that is called whenever
+ * the browser window is resized. It ensures the canvas adjusts to the new
+ * window dimensions and re-initializes the artwork's layout.
  */
 function windowResized() {
-  resizeCanvas(windowWidth, windowHeight); // Adjust canvas size to fill the new window dimensions.
-  initializeArtwork(); // Re-initialize the artwork to adapt wheel placement to the new canvas size.
+  resizeCanvas(windowWidth, windowHeight); // Adjust the canvas size to the new window dimensions.
+  initializeArtwork(); // Re-initialize the wheels and connectors to fit the new canvas size, creating a responsive layout.
 }
